@@ -1,0 +1,25 @@
+# Secrets — never commit
+.env
+*.env
+credentials.json
+secrets.json
+config/local.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Installer binaries — compiled output and bundled CLI
+installer/Output/
+basecamp.exe

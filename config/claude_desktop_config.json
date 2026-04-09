@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "basecamp": {
+      "command": "basecamp",
+      "args": ["mcp", "serve"],
+      "env": {}
+    }
+  }
+}
