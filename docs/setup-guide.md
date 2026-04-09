@@ -108,7 +108,7 @@ Save the file.
 
 ### 4c. Restart Claude Desktop
 
-Close and reopen Claude Desktop. After restarting, you should see a small hammer icon (tools) in the chat input area — this confirms MCP servers are active.
+Close and reopen Claude Desktop. After restarting, confirm the MCP server is active by going to **File → Settings → Developer** — `basecamp` should appear with a green status.
 
 ---
 
@@ -132,7 +132,7 @@ Claude will use the Basecamp CLI in the background to fetch the information.
 |---|---|
 | `basecamp: command not found` | Restart PowerShell after installing Scoop/basecamp |
 | Browser doesn't open for login | Run `basecamp auth login` again |
-| Claude doesn't show hammer icon | Double-check the JSON file — it must be valid JSON (no trailing commas) |
+| Basecamp not showing in File → Settings → Developer | Double-check the JSON file — it must be valid JSON (no trailing commas) |
 | Wrong Basecamp account | Run `basecamp auth logout` then `basecamp auth login` |
 
 **Diagnostics:**

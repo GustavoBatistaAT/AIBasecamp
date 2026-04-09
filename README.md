@@ -159,7 +159,7 @@ The server exposes 27 tools. Claude routes to them automatically based on natura
 
 | Problem | Fix |
 |---|---|
-| Hammer icon missing in Claude Desktop | Restart Claude Desktop; check `claude_desktop_config.json` has `mcpServers.basecamp` |
+| Basecamp not showing in File → Settings → Developer | Restart Claude Desktop; check `claude_desktop_config.json` has `mcpServers.basecamp` |
 | `basecamp: command not found` | Verify `%LOCALAPPDATA%\Programs\BasecampMCP\basecamp.exe` exists |
 | Auth error / token expired | Run `basecamp auth login` in PowerShell |
 | Malformed config warning from CLI | Re-run the installer Configure phase or check `~/.config/basecamp/config.json` for BOM |
