@@ -151,6 +151,7 @@ function Phase-Configure {
     # Ensure Claude config dir exists
     New-Item -ItemType Directory -Force -Path "$env:APPDATA\Claude" | Out-Null
 
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
     Log "Patching Claude Desktop config..."
     $entry = [PSCustomObject]@{
         command = $PythonExe
@@ -168,7 +169,8 @@ function Phase-Configure {
             mcpServers = [PSCustomObject]@{ basecamp = $entry }
         }
     } else {
-        $config = Get-Content $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $raw = [System.IO.File]::ReadAllText($configPath, $utf8NoBom).TrimStart([char]0xFEFF)
+        $config = $raw | ConvertFrom-Json
         if (-not $config.PSObject.Properties["mcpServers"]) {
             $config | Add-Member -MemberType NoteProperty -Name "mcpServers" -Value ([PSCustomObject]@{})
         }
