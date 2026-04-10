@@ -1,6 +1,6 @@
 # Basecamp MCP — Install Helper
 # Called once per phase by the Inno Setup installer.
-# Usage: install_helper.ps1 -Phase <Python|Claude|MCP|Configure>
+# Usage: install_helper.ps1 -Phase <Python|Claude|MCP|Configure|Basecamp>
 
 param (
     [string]$Phase        = "",
@@ -11,6 +11,9 @@ param (
 
 $ErrorActionPreference = "Stop"
 $TempDir = $env:TEMP
+
+# Detect CPU architecture — ARM64 gets native binaries, everything else gets amd64
+$Arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "amd64" }
 
 function Log($msg) { Write-Host "[BasecampMCP] $msg" }
 
@@ -51,6 +54,44 @@ function FindPythonOrFail {
     return $p
 }
 
+# ── PHASE: Basecamp CLI ───────────────────────────────────────────────────────
+# Downloads the correct architecture binary from the latest GitHub release.
+# On x64 the installer already bundles basecamp.exe; this phase only runs on ARM64.
+function Phase-Basecamp {
+    Log "Downloading Basecamp CLI for $Arch..."
+
+    $release = Invoke-RestMethod "https://api.github.com/repos/basecamp/basecamp-cli/releases/latest" `
+        -UseBasicParsing -Headers @{ "User-Agent" = "BasecampMCP-Installer" }
+
+    $assetName = "basecamp_*_windows_${Arch}.zip"
+    $asset = $release.assets | Where-Object { $_.name -like $assetName } | Select-Object -First 1
+
+    if (-not $asset) {
+        Write-Error "No Basecamp CLI release found for windows_${Arch}."
+        exit 1
+    }
+
+    $zipPath = "$TempDir\basecamp_windows_${Arch}.zip"
+    Log "Downloading $($asset.name)..."
+    Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath -UseBasicParsing
+
+    $extractDir = "$TempDir\basecamp_extract"
+    if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+    Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+
+    $exe = Get-ChildItem -Path $extractDir -Filter "basecamp.exe" -Recurse | Select-Object -First 1
+    if (-not $exe) {
+        Write-Error "basecamp.exe not found in downloaded archive."
+        exit 1
+    }
+
+    Copy-Item $exe.FullName "$InstallDir\basecamp.exe" -Force
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+
+    Log "Basecamp CLI ($Arch) installed to $InstallDir."
+}
+
 # ── PHASE: Python ─────────────────────────────────────────────────────────────
 function Phase-Python {
     $PythonExe = FindPython
@@ -60,7 +101,7 @@ function Phase-Python {
         exit 1
     }
 
-    Log "Installing Python 3.12..."
+    Log "Installing Python 3.12 ($Arch)..."
     $installed = $false
 
     if (HasWinget) {
@@ -72,10 +113,13 @@ function Phase-Python {
     }
 
     if (-not $installed -or -not $PythonExe) {
-        Log "Downloading Python 3.12 from python.org..."
+        # Select the correct installer for this architecture
+        $pyFile = if ($Arch -eq "arm64") { "python-3.12.10-arm64.exe" } else { "python-3.12.10-amd64.exe" }
+        $pyUrl  = "https://www.python.org/ftp/python/3.12.10/$pyFile"
+
+        Log "Downloading $pyFile from python.org..."
         $installer = "$TempDir\python-installer.exe"
-        Invoke-WebRequest -Uri "https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe" `
-            -OutFile $installer -UseBasicParsing
+        Invoke-WebRequest -Uri $pyUrl -OutFile $installer -UseBasicParsing
         Start-Process -Wait $installer -ArgumentList @(
             "/quiet", "InstallAllUsers=0", "PrependPath=1",
             "Include_launcher=0", "Include_test=0"
@@ -116,6 +160,7 @@ function Phase-Claude {
     }
 
     if (-not $installed) {
+        # Claude Desktop is x64 only — runs via emulation on ARM64
         Log "Downloading Claude Desktop installer..."
         $installer = "$TempDir\ClaudeSetup.exe"
         Invoke-WebRequest `
@@ -200,12 +245,13 @@ function Phase-Configure {
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 switch ($Phase) {
+    "Basecamp"  { Phase-Basecamp }
     "Python"    { Phase-Python }
     "Claude"    { Phase-Claude }
     "MCP"       { Phase-MCP }
     "Configure" { Phase-Configure }
     default {
-        Write-Error "Unknown phase: '$Phase'. Use Python, Claude, MCP, or Configure."
+        Write-Error "Unknown phase: '$Phase'. Use Basecamp, Python, Claude, MCP, or Configure."
         exit 1
     }
 }

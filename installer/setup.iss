@@ -3,7 +3,7 @@
 ; Build with: Inno Setup Compiler (https://jrsoftware.org/isinfo.php)
 
 #define AppName      "Basecamp AI Assistant"
-#define AppVersion   "1.0"
+#define AppVersion   "1.2"
 #define AppPublisher "Artistic Tile IT"
 #define AppURL       "https://github.com/GustavoBatistaAT/AIBasecamp"
 #define InstallDir   "{localappdata}\Programs\BasecampMCP"
@@ -48,6 +48,13 @@ Source: "install_helper.ps1";         DestDir: "{app}"; Flags: ignoreversion del
 Filename: "powershell.exe"; \
   Parameters: "-ExecutionPolicy Bypass -NonInteractive -Command ""Get-Process claude -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -notlike '*claude-code*' }} | Stop-Process -Force -ErrorAction SilentlyContinue"""; \
   StatusMsg: "Closing Claude Desktop..."; \
+  Flags: runhidden waituntilterminated
+
+; 1b. On ARM64: download native ARM64 basecamp.exe (overwrites the bundled x64 binary)
+Filename: "powershell.exe"; \
+  Parameters: "-ExecutionPolicy Bypass -NonInteractive -File ""{app}\install_helper.ps1"" -Phase Basecamp -InstallDir ""{app}"""; \
+  StatusMsg: "Downloading ARM64 Basecamp CLI..."; \
+  Check: IsArm64; \
   Flags: runhidden waituntilterminated
 
 ; 2. Install Python (only runs if user approved it)
@@ -103,6 +110,12 @@ var
   NeedsClaude: Boolean;
   UserWantsPython: Boolean;
   UserWantsClaude: Boolean;
+
+// ── Architecture detection ────────────────────────────────────────────────────
+function IsArm64(): Boolean;
+begin
+  Result := (GetEnv('PROCESSOR_ARCHITECTURE') = 'ARM64');
+end;
 
 // ── Detect Python ─────────────────────────────────────────────────────────────
 function FindPython(): Boolean;
