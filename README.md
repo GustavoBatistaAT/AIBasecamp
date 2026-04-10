@@ -92,7 +92,7 @@ After the installer finishes, a checkbox offers to open the browser for Basecamp
 ```
 Basecamp-MCP/
 ├── app/
-│   └── basecamp_mcp_server.py      # Python MCP server — 27 Basecamp tools
+│   └── basecamp_mcp_server.py      # Python MCP server — 30 Basecamp tools
 ├── config/
 │   └── claude_desktop_config.json  # Reference MCP config (template)
 ├── docs/
