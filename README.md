@@ -47,12 +47,13 @@ BasecampMCP_Setup.exe
 ```
 
 **What the installer does:**
-1. Detects whether Python 3.12 and Claude Desktop are already installed (prompts to install only if missing)
-2. Installs the Basecamp CLI to `%LOCALAPPDATA%\Programs\BasecampMCP\`
-3. Installs the `mcp` Python package
-4. Patches `%APPDATA%\Claude\claude_desktop_config.json` to register the MCP server
-5. Sets the Artistic Tile Basecamp account ID globally
-6. Restarts Claude Desktop automatically
+1. Detects CPU architecture (x64 or ARM64) and downloads the correct native binaries
+2. Detects whether Python 3.12 and Claude Desktop are already installed (prompts to install only if missing)
+3. Installs the Basecamp CLI to `%LOCALAPPDATA%\Programs\BasecampMCP\`
+4. Installs the `mcp` Python package
+5. Patches `%APPDATA%\Claude\claude_desktop_config.json` to register the MCP server
+6. Sets the Artistic Tile Basecamp account ID globally
+7. Restarts Claude Desktop automatically
 
 After the installer finishes, a checkbox offers to open the browser for Basecamp login (required on first run).
 
@@ -60,10 +61,18 @@ After the installer finishes, a checkbox offers to open the browser for Basecamp
 
 | Requirement | Version | Notes |
 |---|---|---|
-| Windows | 10 / 11 | 64-bit |
+| Windows | 10 / 11 | x64 or ARM64 |
 | Claude Desktop | Latest | Installer can download it |
 | Python | 3.10+ | Installer can download 3.12 |
 | Internet connection | — | Required for Basecamp auth |
+
+### ARM64 (Copilot+ PCs, Surface Pro X, etc.)
+
+The installer runs on ARM64 Windows without any changes. On ARM64 machines it automatically downloads native ARM64 builds of:
+- **Basecamp CLI** — from the official 37signals GitHub release
+- **Python 3.12** — ARM64 build from python.org
+
+Claude Desktop is x64-only (no ARM64 build from Anthropic) but runs transparently via Windows emulation.
 
 > **Compiling the installer** requires [Inno Setup 6](https://jrsoftware.org/isdl.php). Run:
 > ```
