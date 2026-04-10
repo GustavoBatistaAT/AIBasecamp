@@ -77,7 +77,7 @@ After the installer finishes, a checkbox offers to open the browser for Basecamp
 
 1. Open Claude Desktop
 2. Confirm the Basecamp MCP server is active:
-   - Go to **File → Settings → Developer** — `basecamp` should appear with a green status
+   - Go to **File → Settings → Developer** — `basecamp` should appear with a blue status
    
    To disconnect: click **Remove** next to `basecamp` in that same screen, then restart Claude Desktop.
 3. Run Basecamp authentication if not done during install:
