@@ -13,7 +13,7 @@ Claude Desktop  ──MCP──►  Python MCP Server  ──subprocess──►
 ```
 
 - **Claude Desktop** handles the conversation and AI reasoning
-- **Python MCP Server** (`app/basecamp_mcp_server.py`) exposes 27 Basecamp tools via the [Model Context Protocol](https://modelcontextprotocol.io)
+- **Python MCP Server** (`app/basecamp_mcp_server.py`) exposes 30 Basecamp tools via the [Model Context Protocol](https://modelcontextprotocol.io)
 - **Basecamp CLI** (official, by 37signals) handles all API calls and OAuth token storage
 - Authentication is stored securely in the Windows Credential Store — no API keys in config files
 
@@ -109,7 +109,7 @@ Basecamp-MCP/
 
 ## MCP Tools Reference
 
-The server exposes 27 tools. Claude routes to them automatically based on natural language.
+The server exposes 30 tools. Claude routes to them automatically based on natural language.
 
 | Tool | Description |
 |---|---|
