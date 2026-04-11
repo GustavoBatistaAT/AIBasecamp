@@ -71,8 +71,7 @@ After the installer finishes, a checkbox offers to open the browser for Basecamp
 The installer runs on ARM64 Windows without any changes. On ARM64 machines it automatically downloads native ARM64 builds of:
 - **Basecamp CLI** — from the official 37signals GitHub release
 - **Python 3.12** — ARM64 build from python.org
-
-Claude Desktop is x64-only (no ARM64 build from Anthropic) but runs transparently via Windows emulation.
+- **Claude Desktop** — ARM64 build from claude.com/download
 
 > **Compiling the installer** requires [Inno Setup 6](https://jrsoftware.org/isdl.php). Run:
 > ```

@@ -160,12 +160,15 @@ function Phase-Claude {
     }
 
     if (-not $installed) {
-        # Claude Desktop is x64 only — runs via emulation on ARM64
-        Log "Downloading Claude Desktop installer..."
+        # Download the correct Claude Desktop installer for this architecture
+        $claudeUrl = if ($Arch -eq "arm64") {
+            "https://claude.ai/api/desktop/win32/arm64/setup/latest/redirect"
+        } else {
+            "https://claude.ai/api/desktop/win32/x64/setup/latest/redirect"
+        }
+        Log "Downloading Claude Desktop installer ($Arch)..."
         $installer = "$TempDir\ClaudeSetup.exe"
-        Invoke-WebRequest `
-            -Uri "https://storage.googleapis.com/osprey-downloads-c02f6a0d-347c-492b-a752-3e0651722e97/nest-win-x64/Claude-Setup-x64.exe" `
-            -OutFile $installer -UseBasicParsing
+        Invoke-WebRequest -Uri $claudeUrl -OutFile $installer -UseBasicParsing
         Start-Process -Wait $installer -ArgumentList "--silent"
         Remove-Item $installer -Force -ErrorAction SilentlyContinue
     }

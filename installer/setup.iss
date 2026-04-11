@@ -3,7 +3,7 @@
 ; Build with: Inno Setup Compiler (https://jrsoftware.org/isinfo.php)
 
 #define AppName      "Basecamp AI Assistant"
-#define AppVersion   "1.2"
+#define AppVersion   "1.3"
 #define AppPublisher "Artistic Tile IT"
 #define AppURL       "https://github.com/GustavoBatistaAT/AIBasecamp"
 #define InstallDir   "{localappdata}\Programs\BasecampMCP"
