@@ -24,6 +24,11 @@ BC_CONFIG_DIR="$HOME/.config/basecamp"
 BC_CONFIG="$BC_CONFIG_DIR/config.json"
 ACCOUNT_ID="3268280"   # Artistic Tile Basecamp account
 
+# Where to fetch the server script from when running standalone (curl | bash).
+# Override for testing a branch:
+#   BASECAMP_INSTALLER_RAW_BASE=https://raw.githubusercontent.com/OWNER/REPO/BRANCH
+RAW_BASE="${BASECAMP_INSTALLER_RAW_BASE:-https://raw.githubusercontent.com/GustavoBatistaAT/AIBasecamp/main}"
+
 # ── Helpers ───────────────────────────────────────────────────────────────────
 log() { printf "[BasecampMCP] %s\n" "$*"; }
 err() { printf "[BasecampMCP] ERROR: %s\n" "$*" >&2; }
@@ -41,15 +46,24 @@ case "$(uname -m)" in
     *)       err "Unsupported architecture: $(uname -m)"; exit 1 ;;
 esac
 
-# Resolve repo root from the script location
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SERVER_SCRIPT_SRC="$REPO_ROOT/app/basecamp_mcp_server.py"
+# Locate the server script — either from a local repo clone, or fetched from GitHub
+# (standalone mode, when run via `bash -c "$(curl ...)"`).
+SERVER_SCRIPT_SRC=""
+if [[ -n "${BASH_SOURCE[0]:-}" && -f "${BASH_SOURCE[0]}" ]]; then
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CANDIDATE="$SCRIPT_DIR/../app/basecamp_mcp_server.py"
+    if [[ -f "$CANDIDATE" ]]; then
+        SERVER_SCRIPT_SRC="$(cd "$(dirname "$CANDIDATE")" && pwd)/$(basename "$CANDIDATE")"
+    fi
+fi
 
-if [[ ! -f "$SERVER_SCRIPT_SRC" ]]; then
-    err "Cannot find $SERVER_SCRIPT_SRC"
-    err "Run this script from a clone of the AIBasecamp repo."
-    exit 1
+if [[ -z "$SERVER_SCRIPT_SRC" ]]; then
+    log "Standalone mode — fetching server script from $RAW_BASE"
+    SERVER_SCRIPT_SRC="$(mktemp -t basecamp_mcp_server).py"
+    if ! curl -fsSL "$RAW_BASE/app/basecamp_mcp_server.py" -o "$SERVER_SCRIPT_SRC"; then
+        err "Failed to download $RAW_BASE/app/basecamp_mcp_server.py"
+        exit 1
+    fi
 fi
 
 # ── PHASE 1: Python ───────────────────────────────────────────────────────────
