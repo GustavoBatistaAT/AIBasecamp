@@ -25,9 +25,9 @@ BC_CONFIG="$BC_CONFIG_DIR/config.json"
 ACCOUNT_ID="3268280"   # Artistic Tile Basecamp account
 
 # Where to fetch the server script from when running standalone (curl | bash).
-# Override for testing a branch:
-#   BASECAMP_INSTALLER_RAW_BASE=https://raw.githubusercontent.com/OWNER/REPO/BRANCH
-RAW_BASE="${BASECAMP_INSTALLER_RAW_BASE:-https://raw.githubusercontent.com/GustavoBatistaAT/AIBasecamp/main}"
+# TEMPORARY: points at the feat/macos-installer branch during pre-release validation.
+# Flip this to /main once the PR is merged.
+RAW_BASE="${BASECAMP_INSTALLER_RAW_BASE:-https://raw.githubusercontent.com/GustavoBatistaAT/AIBasecamp/feat/macos-installer}"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 log() { printf "[BasecampMCP] %s\n" "$*"; }
