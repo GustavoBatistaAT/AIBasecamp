@@ -30,7 +30,13 @@ err() { printf "[BasecampMCP] ERROR: %s\n" "$*" >&2; }
 
 ask_yn() {
     local prompt="$1" ans
-    read -r -p "$prompt [y/N] " ans
+    # Read from /dev/tty so prompts work under `bash -c "$(curl ...)"`,
+    # where stdin is the -c command text (already EOF), not the terminal.
+    if [[ -r /dev/tty ]]; then
+        read -r -p "$prompt [y/N] " ans < /dev/tty
+    else
+        read -r -p "$prompt [y/N] " ans
+    fi
     [[ "$ans" =~ ^[Yy]$ ]]
 }
 
@@ -252,11 +258,20 @@ PYEOF
 
 # ── PHASE 6: Auth (optional final step) ───────────────────────────────────────
 phase_auth() {
-    log "Launching Basecamp login — a browser window will open."
-    "$INSTALL_DIR/basecamp" auth login || {
-        err "'basecamp auth login' failed. You can re-run it manually:"
-        err "  $INSTALL_DIR/basecamp auth login"
-    }
+    log "Launching Basecamp login — a browser window will open (or a URL will print below)."
+    # Attach the CLI's stdin to the terminal so any interactive prompts inside
+    # `basecamp auth login` work under `bash -c "$(curl ...)"`.
+    if [[ -r /dev/tty ]]; then
+        "$INSTALL_DIR/basecamp" auth login < /dev/tty || {
+            err "'basecamp auth login' failed. You can re-run it manually:"
+            err "  \"$INSTALL_DIR/basecamp\" auth login"
+        }
+    else
+        "$INSTALL_DIR/basecamp" auth login || {
+            err "'basecamp auth login' failed. You can re-run it manually:"
+            err "  \"$INSTALL_DIR/basecamp\" auth login"
+        }
+    fi
 }
 
 # ── Main ──────────────────────────────────────────────────────────────────────
