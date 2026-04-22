@@ -7,8 +7,7 @@
 #   3. Basecamp CLI (darwin)     ── from the official 37signals GitHub release
 #   4. Isolated venv + 'mcp' pkg ── no system-Python pollution (PEP 668 safe)
 #   5. Claude Desktop config     ── registers the basecamp MCP server
-#   6. Basecamp account_id       ── global config (3268280 = Artistic Tile)
-#   7. basecamp auth login       ── browser OAuth flow
+#   6. basecamp auth login       ── browser OAuth flow (picks the account on first run)
 #
 # Run from the repo root:   bash installer/install-macos.sh
 # Or from anywhere:         bash /path/to/repo/installer/install-macos.sh
@@ -20,10 +19,6 @@ APP_NAME="Basecamp AI Assistant"
 INSTALL_DIR="$HOME/Library/Application Support/BasecampMCP"
 CLAUDE_DIR="$HOME/Library/Application Support/Claude"
 CLAUDE_CONFIG="$CLAUDE_DIR/claude_desktop_config.json"
-BC_CONFIG_DIR="$HOME/.config/basecamp"
-BC_CONFIG="$BC_CONFIG_DIR/config.json"
-ACCOUNT_ID="3268280"   # Artistic Tile Basecamp account
-
 # Where to fetch the server script from when running standalone (curl | bash).
 # TEMPORARY: points at the feat/macos-installer branch during pre-release validation.
 # Flip this to /main once the PR is merged.
@@ -253,23 +248,6 @@ cfg_path.parent.mkdir(parents=True, exist_ok=True)
 cfg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 PYEOF
     log "Claude Desktop config updated: $CLAUDE_CONFIG"
-
-    mkdir -p "$BC_CONFIG_DIR"
-    BC_CONFIG="$BC_CONFIG" ACCOUNT_ID="$ACCOUNT_ID" "$VENV_PY" - <<'PYEOF'
-import json, os, pathlib
-
-p = pathlib.Path(os.environ["BC_CONFIG"])
-if p.exists():
-    raw = p.read_text(encoding="utf-8").lstrip("\ufeff")
-    data = json.loads(raw) if raw.strip() else {}
-else:
-    data = {}
-
-data.setdefault("account_id", os.environ["ACCOUNT_ID"])
-p.parent.mkdir(parents=True, exist_ok=True)
-p.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-PYEOF
-    log "Basecamp account ID set: $BC_CONFIG"
 }
 
 # ── PHASE 6: Auth (optional final step) ───────────────────────────────────────
