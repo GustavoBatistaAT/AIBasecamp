@@ -59,11 +59,33 @@ def _clean_messages(raw_json: str) -> str:
     return json.dumps(data)
 
 
-BASECAMP_EXE = (
-    shutil.which("basecamp")
-    or os.path.expandvars(r"%LOCALAPPDATA%\Programs\BasecampMCP\basecamp.exe")
-    or os.path.expandvars(r"%LOCALAPPDATA%\Programs\basecamp\basecamp.exe")
-)
+def _find_basecamp_exe() -> str | None:
+    """Locate the Basecamp CLI binary on this machine.
+
+    Checks PATH first, then a platform-specific list of install locations.
+    Returns None if not found — callers must handle that case.
+    """
+    if found := shutil.which("basecamp"):
+        return found
+
+    candidates = [
+        # Windows — installer default and older layout
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\BasecampMCP\basecamp.exe"),
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\basecamp\basecamp.exe"),
+        # macOS — installer default + Homebrew (arm64 and x64)
+        os.path.expanduser("~/Library/Application Support/BasecampMCP/basecamp"),
+        "/opt/homebrew/bin/basecamp",
+        "/usr/local/bin/basecamp",
+        # Linux / manual install
+        os.path.expanduser("~/.local/bin/basecamp"),
+    ]
+    for p in candidates:
+        if p and os.path.exists(p):
+            return p
+    return None
+
+
+BASECAMP_EXE = _find_basecamp_exe()
 
 
 def _run(args: list[str]) -> str:
