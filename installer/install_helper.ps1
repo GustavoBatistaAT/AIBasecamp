@@ -31,6 +31,17 @@ function WingetInstall($id, $label) {
     return $LASTEXITCODE -eq 0
 }
 
+function PythonWorks($exe) {
+    # Reject the Microsoft Store execution-alias stub: it lives under WindowsApps
+    # and exits non-zero (9009) with a "Python was not found" message on --version.
+    if (-not $exe) { return $false }
+    if ($exe -match '\\WindowsApps\\') { return $false }
+    try {
+        & $exe --version *> $null
+        return ($LASTEXITCODE -eq 0)
+    } catch { return $false }
+}
+
 function FindPython {
     $candidates = @(
         "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
@@ -39,10 +50,29 @@ function FindPython {
         "C:\Python312\python.exe",
         "C:\Python311\python.exe"
     )
-    foreach ($p in $candidates) { if (Test-Path $p) { return $p } }
-    $found = Get-Command python -ErrorAction SilentlyContinue
-    if ($found) { return $found.Source }
+    foreach ($p in $candidates) { if ((Test-Path $p) -and (PythonWorks $p)) { return $p } }
+    foreach ($name in @("python", "python3")) {
+        $found = Get-Command $name -ErrorAction SilentlyContinue
+        if ($found -and (PythonWorks $found.Source)) { return $found.Source }
+    }
+    # py launcher — resolve to the real interpreter path
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        $exe = & py -3 -c "import sys; print(sys.executable)" 2>$null
+        if ($LASTEXITCODE -eq 0 -and $exe -and (Test-Path $exe)) { return $exe }
+    }
     return $null
+}
+
+# Resolve the Claude Desktop config directory. The Microsoft Store (MSIX) build
+# reads from a virtualized LocalCache path, NOT %APPDATA%\Claude.
+function Get-ClaudeConfigDir {
+    $pkgRoot = "$env:LOCALAPPDATA\Packages"
+    if (Test-Path $pkgRoot) {
+        $pkg = Get-ChildItem $pkgRoot -Directory -Filter "Claude_*" -ErrorAction SilentlyContinue |
+               Select-Object -First 1
+        if ($pkg) { return (Join-Path $pkg.FullName "LocalCache\Roaming\Claude") }
+    }
+    return "$env:APPDATA\Claude"
 }
 
 function FindPythonOrFail {
@@ -193,11 +223,13 @@ function Phase-MCP {
 # ── PHASE: Configure ──────────────────────────────────────────────────────────
 function Phase-Configure {
     $PythonExe   = FindPythonOrFail
-    $configPath  = "$env:APPDATA\Claude\claude_desktop_config.json"
+    $configDir   = Get-ClaudeConfigDir
+    $configPath  = Join-Path $configDir "claude_desktop_config.json"
     $serverScript = "$InstallDir\basecamp_mcp_server.py"
 
-    # Ensure Claude config dir exists
-    New-Item -ItemType Directory -Force -Path "$env:APPDATA\Claude" | Out-Null
+    Log "Using Claude config: $configPath"
+    # Ensure Claude config dir exists (Store MSIX uses a virtualized LocalCache path)
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
 
     $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
     Log "Patching Claude Desktop config..."
@@ -229,32 +261,71 @@ function Phase-Configure {
     [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 10), $utf8NoBom)
     Log "Claude Desktop config updated."
 
-    # Initialise Basecamp global config with account ID
-    $bcConfigDir = "$env:USERPROFILE\.config\basecamp"
-    New-Item -ItemType Directory -Force -Path $bcConfigDir | Out-Null
-    $bcConfig = "$bcConfigDir\config.json"
-    if (Test-Path $bcConfig) {
-        $raw = [System.IO.File]::ReadAllText($bcConfig, $utf8NoBom).TrimStart([char]0xFEFF)
-        $cfg = $raw | ConvertFrom-Json
+    # Pin the Basecamp account ID. REQUIRED — the CLI does NOT infer it from auth;
+    # without it every account-scoped call fails with "--account is required".
+    # Artistic Tile is a single-account org (3268280). Multi-account orgs should
+    # instead derive this from https://launchpad.37signals.com/authorization.json
+    # after login and let the user pick.
+    $bcExe = "$InstallDir\basecamp.exe"
+    if (Test-Path $bcExe) {
+        & $bcExe config set account_id 3268280 --global 2>&1 | Out-Null
+        Log "Basecamp account ID set (3268280)."
     } else {
-        $cfg = [PSCustomObject]@{}
+        Log "WARNING: basecamp.exe not found; account_id not set."
     }
-    if (-not $cfg.PSObject.Properties["account_id"]) {
-        $cfg | Add-Member -MemberType NoteProperty -Name "account_id" -Value "3268280"
+}
+
+# ── PHASE: Restart ────────────────────────────────────────────────────────────
+# Re-launches Claude Desktop after configuration. Handles both the Microsoft
+# Store (MSIX) build and the standalone/winget build.
+function Phase-Restart {
+    $pkg = Get-ChildItem "$env:LOCALAPPDATA\Packages" -Directory -Filter "Claude_*" -ErrorAction SilentlyContinue |
+           Select-Object -First 1
+    if ($pkg) {
+        try {
+            $appx = Get-AppxPackage -Name "Claude" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($appx) {
+                $appId = (Get-AppxPackageManifest $appx).Package.Applications.Application.Id
+                if ($appId) {
+                    Start-Process "shell:AppsFolder\$($appx.PackageFamilyName)!$appId"
+                    Log "Restarted Claude Desktop (Store)."
+                    return
+                }
+            }
+        } catch { Log "Could not auto-launch Store Claude ($_); open it manually." }
     }
-    [System.IO.File]::WriteAllText($bcConfig, ($cfg | ConvertTo-Json), $utf8NoBom)
-    Log "Basecamp account ID set."
+    $exe = "$env:LOCALAPPDATA\AnthropicClaude\claude.exe"
+    if (Test-Path $exe) { Start-Process $exe; Log "Restarted Claude Desktop." }
+    else { Log "Claude Desktop not auto-launched; please open it manually." }
+}
+
+# ── PHASE: Unconfigure ────────────────────────────────────────────────────────
+# Removes the basecamp entry from the Claude config on uninstall (Store-aware).
+function Phase-Unconfigure {
+    $configPath = Join-Path (Get-ClaudeConfigDir) "claude_desktop_config.json"
+    if (-not (Test-Path $configPath)) { return }
+    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    $raw = [System.IO.File]::ReadAllText($configPath, $utf8NoBom).TrimStart([char]0xFEFF)
+    try { $config = $raw | ConvertFrom-Json } catch { return }
+    if ($config.PSObject.Properties["mcpServers"] -and
+        $config.mcpServers.PSObject.Properties["basecamp"]) {
+        $config.mcpServers.PSObject.Properties.Remove("basecamp")
+        [System.IO.File]::WriteAllText($configPath, ($config | ConvertTo-Json -Depth 10), $utf8NoBom)
+        Log "Removed basecamp from Claude config."
+    }
 }
 
 # ── Dispatch ──────────────────────────────────────────────────────────────────
 switch ($Phase) {
-    "Basecamp"  { Phase-Basecamp }
-    "Python"    { Phase-Python }
-    "Claude"    { Phase-Claude }
-    "MCP"       { Phase-MCP }
-    "Configure" { Phase-Configure }
+    "Basecamp"    { Phase-Basecamp }
+    "Python"      { Phase-Python }
+    "Claude"      { Phase-Claude }
+    "MCP"         { Phase-MCP }
+    "Configure"   { Phase-Configure }
+    "Restart"     { Phase-Restart }
+    "Unconfigure" { Phase-Unconfigure }
     default {
-        Write-Error "Unknown phase: '$Phase'. Use Basecamp, Python, Claude, MCP, or Configure."
+        Write-Error "Unknown phase: '$Phase'. Use Basecamp, Python, Claude, MCP, Configure, Restart, or Unconfigure."
         exit 1
     }
 }
