@@ -59,11 +59,33 @@ def _clean_messages(raw_json: str) -> str:
     return json.dumps(data)
 
 
-BASECAMP_EXE = (
-    shutil.which("basecamp")
-    or os.path.expandvars(r"%LOCALAPPDATA%\Programs\BasecampMCP\basecamp.exe")
-    or os.path.expandvars(r"%LOCALAPPDATA%\Programs\basecamp\basecamp.exe")
-)
+def _find_basecamp_exe() -> str | None:
+    """Locate the Basecamp CLI binary on this machine.
+
+    Checks PATH first, then a platform-specific list of install locations.
+    Returns None if not found — callers must handle that case.
+    """
+    if found := shutil.which("basecamp"):
+        return found
+
+    candidates = [
+        # Windows — installer default and older layout
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\BasecampMCP\basecamp.exe"),
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\basecamp\basecamp.exe"),
+        # macOS — installer default + Homebrew (arm64 and x64)
+        os.path.expanduser("~/Library/Application Support/BasecampMCP/basecamp"),
+        "/opt/homebrew/bin/basecamp",
+        "/usr/local/bin/basecamp",
+        # Linux / manual install
+        os.path.expanduser("~/.local/bin/basecamp"),
+    ]
+    for p in candidates:
+        if p and os.path.exists(p):
+            return p
+    return None
+
+
+BASECAMP_EXE = _find_basecamp_exe()
 
 
 def _run(args: list[str]) -> str:
@@ -150,7 +172,7 @@ def create_todo(title: str, project: str, notes: str = "", due_on: str = "", ass
     - assignee: optional name or email to assign
     """
     args = ["todos", "create", title, "--project", project]
-    if notes:    args += ["--notes", notes]
+    if notes:    args += ["--description", notes]  # CLI flag is --description, not --notes
     if due_on:   args += ["--due", due_on]
     if assignee: args += ["--assignee", assignee]
     return _run(args)
@@ -264,7 +286,9 @@ def post_message(title: str, content: str, project: str) -> str:
     - content: body text (Markdown supported)
     - project: project ID or name
     """
-    return _run(["messages", "create", "--title", title, "--content", content, "--project", project])
+    # CLI signature is positional: `messages create <title> [body]` — there are no
+    # --title/--content flags. The MCP-facing params stay named title/content.
+    return _run(["messages", "create", title, content, "--project", project])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -296,7 +320,8 @@ def create_comment(recording_id: str, content: str, project: str) -> str:
     - content: the comment text (Markdown supported)
     - project: project ID or name
     """
-    return _run(["comments", "create", recording_id, "--content", content, "--project", project])
+    # CLI signature is positional: `comments create <id|url> <content>` — no --content flag.
+    return _run(["comments", "create", recording_id, content, "--project", project])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
