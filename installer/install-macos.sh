@@ -6,8 +6,8 @@
 #   2. Claude Desktop            ── the MCP client
 #   3. Basecamp CLI (darwin)     ── from the official 37signals GitHub release
 #   4. Isolated venv + 'mcp' pkg ── no system-Python pollution (PEP 668 safe)
-#   5. Claude Desktop config     ── registers the basecamp MCP server
-#   6. basecamp auth login       ── browser OAuth flow (picks the account on first run)
+#   5. Claude Desktop config     ── registers the basecamp MCP server + pins account_id
+#   6. basecamp auth login       ── browser OAuth flow
 #
 # Run from the repo root:   bash installer/install-macos.sh
 # Or from anywhere:         bash /path/to/repo/installer/install-macos.sh
@@ -254,6 +254,17 @@ cfg_path.parent.mkdir(parents=True, exist_ok=True)
 cfg_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 PYEOF
     log "Claude Desktop config updated: $CLAUDE_CONFIG"
+
+    # Pin the Basecamp account ID. REQUIRED — the CLI does NOT infer it from auth;
+    # without it every account-scoped call fails with "--account is required".
+    # Artistic Tile is a single-account org (3268280). Multi-account orgs should
+    # instead derive this from https://launchpad.37signals.com/authorization.json
+    # after login and let the user pick.
+    if [[ -x "$INSTALL_DIR/basecamp" ]]; then
+        "$INSTALL_DIR/basecamp" config set account_id 3268280 --global >/dev/null 2>&1 \
+            && log "Basecamp account ID set (3268280)." \
+            || err "Could not set account_id; run: \"$INSTALL_DIR/basecamp\" config set account_id <id> --global"
+    fi
 }
 
 # ── PHASE 6: Auth (optional final step) ───────────────────────────────────────
