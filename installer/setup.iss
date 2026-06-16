@@ -3,7 +3,7 @@
 ; Build with: Inno Setup Compiler (https://jrsoftware.org/isinfo.php)
 
 #define AppName      "Basecamp AI Assistant"
-#define AppVersion   "1.3"
+#define AppVersion   "1.4"
 #define AppPublisher "Artistic Tile IT"
 #define AppURL       "https://github.com/GustavoBatistaAT/AIBasecamp"
 #define InstallDir   "{localappdata}\Programs\BasecampMCP"
@@ -41,7 +41,8 @@ FinishedLabel=Installation is complete.%n%nClick Finish to connect your Basecamp
 [Files]
 Source: "..\basecamp.exe";            DestDir: "{app}"; Flags: ignoreversion
 Source: "..\app\basecamp_mcp_server.py"; DestDir: "{app}"; Flags: ignoreversion
-Source: "install_helper.ps1";         DestDir: "{app}"; Flags: ignoreversion deleteafterinstall
+; Kept after install (no deleteafterinstall) so the uninstaller can call -Phase Unconfigure
+Source: "install_helper.ps1";         DestDir: "{app}"; Flags: ignoreversion
 
 [Run]
 ; 1. Close Claude Desktop if running (excludes Claude Code CLI)
@@ -83,10 +84,11 @@ Filename: "powershell.exe"; \
   StatusMsg: "Configuring Basecamp AI Assistant..."; \
   Flags: runhidden waituntilterminated
 
-; 6. Restart Claude Desktop (skipped silently if not installed)
-Filename: "{localappdata}\AnthropicClaude\claude.exe"; \
+; 6. Restart Claude Desktop (handles Store MSIX + standalone)
+Filename: "powershell.exe"; \
+  Parameters: "-ExecutionPolicy Bypass -NonInteractive -File ""{app}\install_helper.ps1"" -Phase Restart -InstallDir ""{app}"""; \
   StatusMsg: "Starting Claude Desktop..."; \
-  Flags: nowait skipifdoesntexist
+  Flags: runhidden waituntilterminated
 
 ; 7. Basecamp auth login — postinstall checkbox on final screen
 Filename: "{app}\basecamp.exe"; \
@@ -97,7 +99,7 @@ Filename: "{app}\basecamp.exe"; \
 
 [UninstallRun]
 Filename: "powershell.exe"; \
-  Parameters: "-ExecutionPolicy Bypass -NonInteractive -Command ""$c = Get-Content '$env:APPDATA\Claude\claude_desktop_config.json' -Raw | ConvertFrom-Json; $c.mcpServers.PSObject.Properties.Remove('basecamp'); $c | ConvertTo-Json -Depth 10 | Set-Content '$env:APPDATA\Claude\claude_desktop_config.json'"""; \
+  Parameters: "-ExecutionPolicy Bypass -NonInteractive -File ""{app}\install_helper.ps1"" -Phase Unconfigure -InstallDir ""{app}"""; \
   RunOnceId: "RemoveBasecampMCPConfig"; \
   Flags: runhidden waituntilterminated
 
@@ -118,11 +120,21 @@ begin
 end;
 
 // ── Detect Python ─────────────────────────────────────────────────────────────
+// Real interpreters exit 0 on '--version'. The Microsoft Store execution-alias
+// stub (WindowsApps\python.exe) exits 9009, so a plain 'where python' is not
+// enough — it would falsely report Python as installed.
+function PythonRuns(Cmd: String): Boolean;
+var
+  Code: Integer;
+begin
+  Result := Exec('cmd.exe', '/C ' + Cmd + ' --version', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+
 function FindPython(): Boolean;
 var
   Candidates: TArrayOfString;
   LocalAppData: String;
-  i, Code: Integer;
+  i: Integer;
 begin
   LocalAppData := GetEnv('LOCALAPPDATA');
   SetArrayLength(Candidates, 5);
@@ -133,15 +145,16 @@ begin
   Candidates[4] := 'C:\Python311\python.exe';
   for i := 0 to GetArrayLength(Candidates) - 1 do
     if FileExists(Candidates[i]) then begin Result := True; Exit; end;
-  Exec('cmd.exe', '/C where python > nul 2>&1', '', SW_HIDE, ewWaitUntilTerminated, Code);
-  Result := (Code = 0);
+  if PythonRuns('python') then begin Result := True; Exit; end;
+  if PythonRuns('py -3') then begin Result := True; Exit; end;
+  Result := False;
 end;
 
 // ── Detect Claude Desktop ─────────────────────────────────────────────────────
 function FindClaude(): Boolean;
 var
-  StoreKey: String;
   AppData, LocalAppData: String;
+  FindRec: TFindRec;
 begin
   // Use GetEnv so resolution works at InitializeSetup time (before shell constants load)
   AppData      := GetEnv('APPDATA');
@@ -153,10 +166,19 @@ begin
   // Winget EXE path (non-Store install)
   if FileExists(LocalAppData + '\AnthropicClaude\claude.exe') then begin Result := True; Exit; end;
 
-  // Microsoft Store (MSIX) install — version-independent subkey match
-  StoreKey := 'Software\Classes\Local Settings\Software\Microsoft\Windows\' +
-              'CurrentVersion\AppModel\Repository\Packages';
-  Result := RegKeyExists(HKCU, StoreKey + '\Claude_1.1062.0.0_x64__pzs8sxrjxfjjc');
+  // Microsoft Store (MSIX) install — match any versioned package folder
+  // (%LOCALAPPDATA%\Packages\Claude_*), so detection survives version bumps.
+  if FindFirst(LocalAppData + '\Packages\Claude_*', FindRec) then
+  begin
+    try
+      Result := True;
+      Exit;
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+
+  Result := False;
 end;
 
 // ── Prompt helpers ────────────────────────────────────────────────────────────
