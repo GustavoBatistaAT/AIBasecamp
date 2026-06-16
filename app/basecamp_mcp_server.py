@@ -233,8 +233,10 @@ def reports_assigned(person: str = "") -> str:
     List todos assigned to a specific person across all projects.
     Leave person empty to see all assigned work.
     """
+    # CLI signature is `reports assigned [person]` — person is positional (defaults
+    # to "me" when omitted). There is no --assignee flag on this command.
     args = ["reports", "assigned"]
-    if person: args += ["--assignee", person]
+    if person: args.append(person)
     return _run(args)
 
 
